@@ -2,8 +2,6 @@
 
 AI-powered company intelligence + live day trader signal platform. Evaluates public stocks, startups, IPO candidates, and pitch decks — plus a live Day Trader tab ranking the most active movers by momentum score with Claude AI signal reads.
 
-**Live:** `https://aitmai.github.io/day-trader-intel`
-
 Inherits Phase 1 from `market-intel` and adds the Day Trader tab in Phase 2.
 
 ---
