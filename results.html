@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evaluation Results — market-intel</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <header class="topbar">
+    <a href="index.html" class="brand">
+      <div class="brand-pip"></div>
+      market-intel
+    </a>
+    <nav class="nav-tabs">
+      <a href="index.html" class="nav-tab"><i class="ti ti-plus"></i> Evaluate</a>
+      <a href="index.html#history" class="nav-tab"><i class="ti ti-history"></i> History</a>
+      <a href="daytrader.html" class="nav-tab"><span class="live-dot"></span> Day trader</a>
+    </nav>
+  </header>
+
+  <main class="main" id="results-main">
+    <p class="text-muted" style="padding:40px 0 0">Loading evaluation…</p>
+  </main>
+</div>
+
+<script>
+  const SCORE_COLOR = function(n) {
+    if (n >= 80) return '#1D9E75';
+    if (n >= 60) return '#BA7517';
+    return '#E24B4A';
+  };
+
+  const MOAT_CLASS = function(m) {
+    return ({ Strong:'m-str', Moderate:'m-mod', Weak:'m-wk', Unproven:'m-na' }[m] || 'm-na');
+  };
+
+  const SIGNAL_CLASS = function(s) {
+    return ({ 'Strong Buy':'sig-buy-strong', 'Buy':'sig-buy', 'Watch':'sig-watch', 'Sell':'sig-sell', 'Short':'sig-short' }[s] || 'sig-watch');
+  };
+
+  const IMPACT_CLASS = function(i) {
+    return ({ High:'imp-high', Medium:'imp-med', Low:'imp-low' }[i] || 'imp-med');
+  };
+
+  const IMPACT_ICON = function(i) {
+    return ({ High:'fi-high', Medium:'fi-med', Low:'fi-low' }[i] || 'fi-med');
+  };
+
+  function stageLabel(type, stage) {
+    const map = {
+      public:  { text:'Public',      bg:'#E6F1FB', color:'#0C447C' },
+      startup: { text: stage || 'Startup', bg:'#EEEDFE', color:'#3C3489' },
+      ipo:     { text:'Pre-IPO',     bg:'#EAF3DE', color:'#27500A' },
+      deck:    { text:'Pitch deck',  bg:'#FAEEDA', color:'#633806' },
+    };
+    const l = map[type] || { text: type, bg:'#F1EFE8', color:'#5F5E5A' };
+    return '<span class="badge" style="background:' + l.bg + ';color:' + l.color + '">' + l.text + '</span>';
+  }
+
+  function render(r) {
+    const sc       = SCORE_COLOR(r.aiScore || 0);
+    const flags    = r.redFlags    || [];
+    const strengths= r.strengths   || [];
+    const metrics  = r.metrics     || {};
+    const memo     = r.dealMemo    || {};
+
+    document.getElementById('results-main').innerHTML = `
+      <a href="index.html" style="font-size:12px;color:var(--text2);text-decoration:none;display:inline-flex;align-items:center;gap:5px;margin-bottom:20px">
+        <i class="ti ti-arrow-left"></i> New evaluation
+      </a>
+
+      <div class="result-hero">
+        <div class="result-top">
+          <div class="result-info">
+            <div class="result-company">${r.company || 'Unknown Company'}</div>
+            <div class="result-meta" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+              ${r.ticker ? '<span style="font-weight:600;color:var(--accent)">' + r.ticker + '</span>' : ''}
+              ${stageLabel(r.type, r.stage)}
+              <span class="badge ${SIGNAL_CLASS(r.signal)}">${r.signal || '—'}</span>
+              <span class="badge ${MOAT_CLASS(r.moat)}">${r.moat || '—'} moat</span>
+            </div>
+            <p style="font-size:13px;color:var(--text2);margin-top:12px;line-height:1.65;max-width:560px">${r.summary || ''}</p>
+          </div>
+          <div class="score-circle" style="color:${sc};border-color:${sc}">${r.aiScore || '—'}</div>
+        </div>
+
+        <div class="metric-grid" style="margin-top:16px">
+          <div class="metric-card"><div class="mc-label">Revenue growth</div><div class="mc-val">${metrics.revenueGrowth || '—'}</div></div>
+          <div class="metric-card"><div class="mc-label">Gross margin</div><div class="mc-val">${metrics.grossMargin || '—'}</div></div>
+          <div class="metric-card"><div class="mc-label">Burn multiple</div><div class="mc-val">${metrics.burnMultiple || '—'}</div></div>
+          <div class="metric-card"><div class="mc-label">Runway</div><div class="mc-val">${metrics.runway || '—'}</div></div>
+          <div class="metric-card"><div class="mc-label">Est. return range</div><div class="mc-val">${metrics.estimatedReturn || '—'}</div></div>
+          <div class="metric-card"><div class="mc-label">AI score</div><div class="mc-val" style="color:${sc}">${r.aiScore || '—'} / 100</div></div>
+        </div>
+      </div>
+
+      ${flags.length ? `
+      <div class="result-section">
+        <div class="section-title" style="color:var(--danger)">
+          <i class="ti ti-shield-exclamation"></i> Red flags (${flags.length})
+        </div>
+        ${flags.map(f => `
+        <div class="flag-item">
+          <div class="fi-icon ${IMPACT_ICON(f.impact)}"><i class="ti ti-alert-triangle"></i></div>
+          <div class="fi-body">
+            <div class="fi-label">${f.label}</div>
+            <div class="fi-desc">${f.description}</div>
+            <div class="fi-impact" style="margin-top:6px"><span class="badge ${IMPACT_CLASS(f.impact)}">${f.impact} impact</span></div>
+          </div>
+        </div>`).join('')}
+      </div>` : ''}
+
+      ${strengths.length ? `
+      <div class="result-section">
+        <div class="section-title" style="color:var(--success)">
+          <i class="ti ti-circle-check"></i> Strengths
+        </div>
+        <div class="strength-list">
+          ${strengths.map(s => '<div class="strength-item">' + s + '</div>').join('')}
+        </div>
+      </div>` : ''}
+
+      ${Object.keys(memo).length ? `
+      <div class="result-section">
+        <div class="section-title"><i class="ti ti-file-text"></i> Deal memo</div>
+        <div class="memo-grid">
+          ${memo.thesis        ? '<div class="memo-item"><div class="memo-key">Investment thesis</div><div class="memo-val">' + memo.thesis + '</div></div>' : ''}
+          ${memo.market        ? '<div class="memo-item"><div class="memo-key">Market</div><div class="memo-val">' + memo.market + '</div></div>' : ''}
+          ${memo.team          ? '<div class="memo-item"><div class="memo-key">Team</div><div class="memo-val">' + memo.team + '</div></div>' : ''}
+          ${memo.risks         ? '<div class="memo-item"><div class="memo-key">Key risks</div><div class="memo-val">' + memo.risks + '</div></div>' : ''}
+          ${memo.recommendation? '<div class="memo-item"><div class="memo-key">Recommendation</div><div class="memo-val" style="font-weight:600">' + memo.recommendation + '</div></div>' : ''}
+        </div>
+      </div>` : ''}
+
+      <div class="results-bar">
+        <a href="index.html" class="btn btn-ghost"><i class="ti ti-plus"></i> New evaluation</a>
+        <button class="btn btn-ghost" onclick="window.print()"><i class="ti ti-printer"></i> Print / PDF</button>
+        <button class="btn btn-ghost" onclick="copyJSON()"><i class="ti ti-copy"></i> Copy JSON</button>
+      </div>
+    `;
+  }
+
+  window.copyJSON = function() {
+    navigator.clipboard.writeText(sessionStorage.getItem('mi-result') || '').then(() => alert('Copied to clipboard'));
+  };
+
+  const result = JSON.parse(sessionStorage.getItem('mi-result') || 'null');
+  if (!result) {
+    document.getElementById('results-main').innerHTML = '<p style="padding:40px 0">No evaluation found. <a href="index.html">Run one now.</a></p>';
+  } else {
+    render(result);
+  }
+</script>
+</body>
+</html>

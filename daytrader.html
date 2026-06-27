@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Day Trader — market-intel</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <a href="index.html" class="brand"><div class="brand-pip"></div>market-intel</a>
+    <nav class="nav-tabs">
+      <a href="index.html" class="nav-tab"><i class="ti ti-plus"></i> Evaluate</a>
+      <a href="rankings.html" class="nav-tab"><i class="ti ti-chart-bar"></i> Rankings</a>
+      <a href="index.html#history" class="nav-tab"><i class="ti ti-history"></i> History</a>
+      <a href="daytrader.html" class="nav-tab active-trader"><span class="live-dot"></span> Day trader</a>
+    </nav>
+  </header>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Day trader signals</div>
+        <div class="page-sub">Most active movers ranked by momentum score — AI signal read on every row</div>
+      </div>
+      <button class="refresh-btn" id="refresh-btn" onclick="loadMovers()">
+        <i class="ti ti-refresh" id="refresh-icon"></i> Refresh
+      </button>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="sc-label">Movers tracked</div>
+        <div class="sc-val" id="stat-count">—</div>
+        <div class="sc-sub" id="stat-time">loading…</div>
+      </div>
+      <div class="stat-card">
+        <div class="sc-label">Strong buy signals</div>
+        <div class="sc-val text-success" id="stat-buys">—</div>
+        <div class="sc-sub">across all movers</div>
+      </div>
+      <div class="stat-card">
+        <div class="sc-label">Volume spikes 3x+</div>
+        <div class="sc-val text-danger" id="stat-spikes">—</div>
+        <div class="sc-sub">unusual activity</div>
+      </div>
+      <div class="stat-card">
+        <div class="sc-label">Avg momentum</div>
+        <div class="sc-val" id="stat-avg">—</div>
+        <div class="sc-sub">out of 100</div>
+      </div>
+    </div>
+
+    <!-- Filter chips -->
+    <div class="filter-bar">
+      <div class="chips">
+        <span class="chip trader-on" id="chip-gainers" onclick="switchFilter('day_gainers', this)">Top gainers <i class="ti ti-chevron-down" style="font-size:10px"></i></span>
+        <span class="chip" id="chip-losers" onclick="switchFilter('day_losers', this)">Top losers</span>
+        <span class="chip" id="chip-active" onclick="switchFilter('most_actives', this)">Most active</span>
+        <span class="chip" onclick="filterSignal('buy')">Buy signals</span>
+        <span class="chip" onclick="filterSignal('watch')">Watch</span>
+        <span class="chip" onclick="filterSignal('short')">Short signals</span>
+        <span class="chip" onclick="clearFilter()">All <i class="ti ti-x" style="font-size:10px"></i></span>
+      </div>
+      <div class="last-update"><span class="live-dot"></span><span id="last-update-text">Loading…</span></div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table>
+        <colgroup>
+          <col style="width:30px">
+          <col style="width:120px">
+          <col style="width:70px">
+          <col style="width:62px">
+          <col style="width:88px">
+          <col style="width:96px">
+          <col style="width:68px">
+          <col style="width:64px">
+          <col style="width:82px">
+          <col style="width:90px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ticker</th>
+            <th>Price</th>
+            <th>Change</th>
+            <th>Volume</th>
+            <th>Momentum</th>
+            <th>RSI</th>
+            <th>MACD</th>
+            <th>AI signal</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="movers-tbody">
+          <tr><td colspan="10" class="empty-state"><i class="ti ti-loader"></i> Loading movers…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Fetching live data…</div>
+</div>
+
+<script>
+  const WORKER_URL = 'https://steep-shadow-3542.clashworldgame88.workers.dev';
+  let currentFilter = 'day_gainers';
+  let allMovers = [];
+  let signalFilter = null;
+  let refreshTimer = null;
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function scoreColor(n) {
+    if (n >= 80) return '#1D9E75';
+    if (n >= 60) return '#BA7517';
+    return '#E24B4A';
+  }
+
+  function signalClass(s) {
+    const map = { 'Strong Buy':'sig-strong-buy','Buy':'sig-buy','Watch':'sig-watch','Sell':'sig-sell','Short':'sig-short' };
+    return map[s] || 'sig-watch';
+  }
+
+  function volClass(ratio) {
+    if (ratio >= 3) return 'vol-spike';
+    if (ratio >= 2) return 'vol-high';
+    return 'vol-normal';
+  }
+
+  function volColor(ratio) {
+    if (ratio >= 3) return 'var(--danger)';
+    if (ratio >= 2) return 'var(--warn)';
+    return 'var(--accent)';
+  }
+
+  function heatBars(score) {
+    const colors = score >= 80
+      ? ['#EAF3DE','#C0DD97','#639922','#3B6D11','#27500A']
+      : score >= 60
+      ? ['#EAF3DE','#C0DD97','#639922','#3B6D11','#D3D1C7']
+      : score >= 40
+      ? ['#FCEBEB','#F09595','#E24B4A','#D3D1C7','#D3D1C7']
+      : ['#FCEBEB','#F09595','#E24B4A','#A32D2D','#791F1F'];
+    return colors.map(c => `<div class="hb" style="background:${c}"></div>`).join('');
+  }
+
+  function momentumScore(mover) {
+    let score = 50;
+    const chg = Math.abs(mover.change || 0);
+    score += Math.min(chg * 3, 20);
+    const vr = mover.volRatio || 1;
+    score += Math.min((vr - 1) * 8, 20);
+    if (mover.pct52w > 80) score += 10;
+    else if (mover.pct52w < 20) score -= 10;
+    return Math.min(100, Math.max(0, Math.round(score)));
+  }
+
+  function formatVol(v) {
+    if (!v) return '—';
+    if (v >= 1e9) return (v/1e9).toFixed(1)+'B';
+    if (v >= 1e6) return (v/1e6).toFixed(1)+'M';
+    if (v >= 1e3) return (v/1e3).toFixed(0)+'K';
+    return v;
+  }
+
+  // ── Load movers ──────────────────────────────────────────────────────────
+  async function loadMovers() {
+    const btn  = document.getElementById('refresh-btn');
+    const icon = document.getElementById('refresh-icon');
+    btn.classList.add('spinning');
+    document.getElementById('last-update-text').textContent = 'Refreshing…';
+
+    try {
+      const res  = await fetch(WORKER_URL + '/fetch-movers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filter: currentFilter }),
+      });
+      const data = await res.json();
+      allMovers  = (data.movers || []).map(m => ({ ...m, momentum: momentumScore(m) }));
+
+      updateStats();
+      renderTable(allMovers);
+
+      const now = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+      document.getElementById('last-update-text').textContent = `Updated ${now} · auto-refresh in 60s`;
+      document.getElementById('stat-time').textContent = `${allMovers.length} loaded`;
+
+      clearInterval(refreshTimer);
+      refreshTimer = setInterval(loadMovers, 60000);
+    } catch (err) {
+      document.getElementById('movers-tbody').innerHTML = `<tr><td colspan="10" class="empty-state">Failed to load — ${err.message}</td></tr>`;
+    } finally {
+      btn.classList.remove('spinning');
+    }
+  }
+
+  // ── Update stat cards ────────────────────────────────────────────────────
+  function updateStats() {
+    document.getElementById('stat-count').textContent  = allMovers.length;
+    document.getElementById('stat-spikes').textContent = allMovers.filter(m => (m.volRatio||0) >= 3).length;
+    const avg = allMovers.length ? Math.round(allMovers.reduce((s,m) => s + m.momentum, 0) / allMovers.length) : 0;
+    document.getElementById('stat-avg').textContent = avg;
+  }
+
+  // ── Render table ─────────────────────────────────────────────────────────
+  function renderTable(movers) {
+    const tbody = document.getElementById('movers-tbody');
+    if (!movers.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No movers found</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = movers.map((m, i) => {
+      const chgClass = m.change >= 0 ? 'pos' : 'neg';
+      const chgStr   = (m.change >= 0 ? '+' : '') + m.change.toFixed(2) + '%';
+      const vr       = m.volRatio || 1;
+      const vrPct    = Math.min(100, Math.round(vr / 5 * 100));
+      const sc       = m.momentum;
+      const scColor  = scoreColor(sc);
+
+      return `
+      <tr class="data-row">
+        <td class="rk">${i+1}</td>
+        <td>
+          <div class="tkr">${m.ticker}</div>
+          <div class="co-name" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name}</div>
+        </td>
+        <td style="font-weight:600">$${m.price.toFixed(2)}</td>
+        <td class="${chgClass}">${chgStr}</td>
+        <td>
+          <div class="vol-wrap">
+            <div class="vol-bar"><div class="vol-fill ${volClass(vr)}" style="width:${vrPct}%"></div></div>
+            <span class="vol-ratio" style="color:${volColor(vr)}">${vr.toFixed(1)}x</span>
+          </div>
+          <div style="font-size:10px;color:var(--text3)">${formatVol(m.volume)}</div>
+        </td>
+        <td>
+          <div class="heat">${heatBars(sc)}<span class="heat-score" style="color:${scColor}">${sc}</span></div>
+        </td>
+        <td>
+          <div class="ind-val" id="rsi-${m.ticker}" style="color:var(--text3)">—</div>
+          <div class="ind-lbl" id="rsi-lbl-${m.ticker}">loading</div>
+        </td>
+        <td>
+          <div class="dir-badge" id="macd-${m.ticker}">
+            <div class="dir-dot d-mix"></div>
+            <span style="font-size:11px;color:var(--text3)">—</span>
+          </div>
+        </td>
+        <td id="sig-badge-${m.ticker}"><span class="badge sig-watch">Watch</span></td>
+        <td>
+          <button class="sig-btn" id="sig-btn-${m.ticker}" onclick="toggleSignal('${m.ticker}', ${i})">
+            Signals <i class="ti ti-chevron-down chevron" id="chev-${m.ticker}"></i>
+          </button>
+        </td>
+      </tr>
+      <tr class="sig-row">
+        <td colspan="10">
+          <div class="sig-panel" id="panel-${m.ticker}">
+            <div class="sp-head">
+              <div class="sp-title"><i class="ti ti-bolt"></i> Signal breakdown — ${m.ticker}</div>
+              <button class="sp-close" onclick="closePanel('${m.ticker}')"><i class="ti ti-x"></i> Close</button>
+            </div>
+            <div class="sp-grid" id="sp-grid-${m.ticker}">
+              <div class="sp-card"><div class="sp-card-lbl">Price</div><div class="sp-card-val">$${m.price.toFixed(2)}</div><div class="sp-card-sub">${chgStr} today</div></div>
+              <div class="sp-card"><div class="sp-card-lbl">Volume vs avg</div><div class="sp-card-val" style="color:${volColor(vr)}">${vr.toFixed(1)}x</div><div class="sp-card-sub">${formatVol(m.volume)} shares</div></div>
+              <div class="sp-card"><div class="sp-card-lbl">52w position</div><div class="sp-card-val">${m.pct52w}th %ile</div><div class="sp-card-sub">of 52w range</div></div>
+              <div class="sp-card"><div class="sp-card-lbl">Momentum score</div><div class="sp-card-val" style="color:${scColor}">${sc}</div><div class="sp-card-sub">composite rank</div></div>
+              <div class="sp-card" id="rsi-card-${m.ticker}"><div class="sp-card-lbl">RSI (14)</div><div class="sp-card-val">Loading…</div><div class="sp-card-sub">—</div></div>
+              <div class="sp-card" id="macd-card-${m.ticker}"><div class="sp-card-lbl">MACD</div><div class="sp-card-val">Loading…</div><div class="sp-card-sub">—</div></div>
+            </div>
+            <div class="ai-read" id="ai-read-${m.ticker}">Loading AI signal read…</div>
+            <div class="sp-footer">
+              <button class="btn-sm" onclick="sendTradePlan('${m.ticker}', '${m.price.toFixed(2)}')">Get trade plan ↗</button>
+              <button class="btn-sm" onclick="sendRiskAnalysis('${m.ticker}')">Key risks ↗</button>
+            </div>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    // Lazy-load indicators for visible rows
+    movers.forEach(m => loadIndicators(m));
+  }
+
+  // ── Load indicators per ticker ────────────────────────────────────────────
+  async function loadIndicators(mover) {
+    try {
+      const res  = await fetch(WORKER_URL + '/fetch-indicators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker: mover.ticker }),
+      });
+      const ind = await res.json();
+
+      // Update RSI cell
+      const rsiEl    = document.getElementById('rsi-' + mover.ticker);
+      const rsiLbl   = document.getElementById('rsi-lbl-' + mover.ticker);
+      const rsiCard  = document.getElementById('rsi-card-' + mover.ticker);
+      if (rsiEl && ind.rsi !== null) {
+        const rsiColor = ind.rsi >= 70 ? 'var(--danger)' : ind.rsi <= 30 ? 'var(--success)' : 'var(--warn)';
+        rsiEl.textContent  = ind.rsi;
+        rsiEl.style.color  = rsiColor;
+        rsiLbl.textContent = ind.rsiLabel;
+        if (rsiCard) rsiCard.innerHTML = `<div class="sp-card-lbl">RSI (14)</div><div class="sp-card-val" style="color:${rsiColor}">${ind.rsi}</div><div class="sp-card-sub">${ind.rsiLabel}</div>`;
+      }
+
+      // Update MACD cell
+      const macdEl   = document.getElementById('macd-' + mover.ticker);
+      const macdCard = document.getElementById('macd-card-' + mover.ticker);
+      if (macdEl && ind.macdDir) {
+        const dotClass = ind.macdDir === 'bullish' ? 'd-bull' : ind.macdDir === 'bearish' ? 'd-bear' : 'd-mix';
+        macdEl.innerHTML = `<div class="dir-dot ${dotClass}"></div><span style="font-size:11px;text-transform:capitalize">${ind.macdDir}</span>`;
+        if (macdCard) {
+          const macdColor = ind.macdDir === 'bullish' ? 'var(--success)' : ind.macdDir === 'bearish' ? 'var(--danger)' : 'var(--warn)';
+          macdCard.innerHTML = `<div class="sp-card-lbl">MACD</div><div class="sp-card-val" style="color:${macdColor}">${ind.macd !== null ? ind.macd : '—'}</div><div class="sp-card-sub">${ind.macdDir}</div>`;
+        }
+      }
+
+      // Store indicators on mover object for signal fetch
+      mover._indicators = ind;
+    } catch (err) {
+      // Silently fail per ticker
+    }
+  }
+
+  // ── Toggle signal panel ──────────────────────────────────────────────────
+  async function toggleSignal(ticker, idx) {
+    const panel  = document.getElementById('panel-' + ticker);
+    const chev   = document.getElementById('chev-' + ticker);
+    const isOpen = panel.classList.contains('open');
+
+    // Close all
+    document.querySelectorAll('.sig-panel.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.chevron.open').forEach(c => c.classList.remove('open'));
+
+    if (!isOpen) {
+      panel.classList.add('open');
+      chev.classList.add('open');
+
+      const mover = allMovers[idx];
+      if (!mover._signalLoaded) {
+        mover._signalLoaded = true;
+        await fetchAISignal(mover);
+      }
+    }
+  }
+
+  // ── Fetch AI signal ──────────────────────────────────────────────────────
+  async function fetchAISignal(mover) {
+    const aiReadEl  = document.getElementById('ai-read-' + mover.ticker);
+    const sigBadge  = document.getElementById('sig-badge-' + mover.ticker);
+
+    try {
+      const res = await fetch(WORKER_URL + '/fetch-signal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker:     mover.ticker,
+          quote:      mover,
+          indicators: mover._indicators || {},
+        }),
+      });
+      const sig = await res.json();
+
+      // Update AI read
+      if (aiReadEl) aiReadEl.textContent = sig.aiRead || 'No signal available';
+
+      // Update signal badge in table
+      if (sigBadge) sigBadge.innerHTML = `<span class="badge ${signalClass(sig.signal)}">${sig.signal}</span>`;
+
+      // Update stat buys
+      const buyCount = allMovers.filter(m => m._sig && (m._sig === 'Strong Buy' || m._sig === 'Buy')).length;
+      document.getElementById('stat-buys').textContent = buyCount || '—';
+
+      mover._sig = sig.signal;
+
+      // Add trade plan cards if available
+      if (sig.entryZone || sig.target || sig.stopLoss) {
+        const grid = document.getElementById('sp-grid-' + mover.ticker);
+        if (grid && sig.entryZone) {
+          grid.innerHTML += `
+            <div class="sp-card"><div class="sp-card-lbl">Entry zone</div><div class="sp-card-val" style="font-size:13px">${sig.entryZone}</div></div>
+            <div class="sp-card"><div class="sp-card-lbl">Target</div><div class="sp-card-val" style="font-size:13px;color:var(--success)">${sig.target || '—'}</div></div>
+            <div class="sp-card"><div class="sp-card-lbl">Stop loss</div><div class="sp-card-val" style="font-size:13px;color:var(--danger)">${sig.stopLoss || '—'}</div></div>
+          `;
+        }
+      }
+    } catch (err) {
+      if (aiReadEl) aiReadEl.textContent = 'Could not load AI signal — ' + err.message;
+    }
+  }
+
+  // ── Close panel ──────────────────────────────────────────────────────────
+  function closePanel(ticker) {
+    document.getElementById('panel-' + ticker).classList.remove('open');
+    const chev = document.getElementById('chev-' + ticker);
+    if (chev) chev.classList.remove('open');
+  }
+
+  // ── Switch mover filter ──────────────────────────────────────────────────
+  function switchFilter(filter, el) {
+    currentFilter = filter;
+    document.querySelectorAll('.chip').forEach(c => { c.classList.remove('on'); c.classList.remove('trader-on'); });
+    el.classList.add('trader-on');
+    loadMovers();
+  }
+
+  // ── Signal filter ────────────────────────────────────────────────────────
+  function filterSignal(type) {
+    signalFilter = type;
+    const filtered = allMovers.filter(m => {
+      const s = (m._sig || 'watch').toLowerCase();
+      if (type === 'buy')   return s === 'strong buy' || s === 'buy';
+      if (type === 'watch') return s === 'watch';
+      if (type === 'short') return s === 'short' || s === 'sell';
+      return true;
+    });
+    renderTable(filtered);
+  }
+
+  function clearFilter() {
+    signalFilter = null;
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+    renderTable(allMovers);
+  }
+
+  // ── Trade plan prompts ────────────────────────────────────────────────────
+  function sendTradePlan(ticker, price) {
+    window.open('index.html?prompt=Give+me+a+full+day+trade+plan+for+' + ticker + '+at+$' + price + '+including+entry,+target,+and+stop+loss', '_blank');
+  }
+  function sendRiskAnalysis(ticker) {
+    window.open('index.html?prompt=What+are+the+key+risk+factors+for+trading+' + ticker + '+today', '_blank');
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  loadMovers();
+</script>
+</body>
+</html>

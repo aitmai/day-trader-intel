@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>market-intel — Company Intelligence Platform</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <header class="topbar">
+    <a href="index.html" class="brand">
+      <div class="brand-pip"></div>
+      market-intel
+    </a>
+    <nav class="nav-tabs">
+      <a href="index.html" class="nav-tab active"><i class="ti ti-plus"></i> Evaluate</a>
+      <a href="index.html#history" class="nav-tab"><i class="ti ti-history"></i> History</a>
+      <a href="daytrader.html" class="nav-tab"><span class="live-dot"></span> Day trader</a>
+    </nav>
+  </header>
+
+  <main class="main">
+    <div class="page-header">
+      <h1 class="page-title">Evaluate a company</h1>
+      <p class="page-sub">Public stocks, startups, IPO candidates, or pitch decks — Claude scores them all.</p>
+    </div>
+
+    <div class="section-label">What are you evaluating?</div>
+    <div class="type-grid">
+      <div class="type-card active" id="tc-public" onclick="selectType('public')" role="button" tabindex="0">
+        <div class="tc-icon" style="background:#E6F1FB;color:#0C447C"><i class="ti ti-building-skyscraper"></i></div>
+        <div class="tc-title">Public company</div>
+        <div class="tc-sub">Ticker → SEC filings, earnings, analyst data</div>
+      </div>
+      <div class="type-card" id="tc-startup" onclick="selectType('startup')" role="button" tabindex="0">
+        <div class="tc-icon" style="background:#EAF3DE;color:#27500A"><i class="ti ti-rocket"></i></div>
+        <div class="tc-title">Startup</div>
+        <div class="tc-sub">Pre-seed through Series C+ — manual entry</div>
+      </div>
+      <div class="type-card" id="tc-ipo" onclick="selectType('ipo')" role="button" tabindex="0">
+        <div class="tc-icon" style="background:#FAEEDA;color:#633806"><i class="ti ti-chart-arrows-vertical"></i></div>
+        <div class="tc-title">IPO candidate</div>
+        <div class="tc-sub">S-1 upload or pre-IPO company data</div>
+      </div>
+      <div class="type-card" id="tc-deck" onclick="selectType('deck')" role="button" tabindex="0">
+        <div class="tc-icon" style="background:#EEEDFE;color:#3C3489"><i class="ti ti-presentation"></i></div>
+        <div class="tc-title">Pitch deck</div>
+        <div class="tc-sub">Upload any PDF — Claude extracts and scores</div>
+      </div>
+    </div>
+
+    <!-- PUBLIC FORM -->
+    <div id="fs-public" class="form-panel">
+      <div class="form-title" style="color:#0C447C"><i class="ti ti-building-skyscraper"></i> Public company evaluation</div>
+      <div class="field-row col2">
+        <div class="field"><label>Ticker symbol</label><input type="text" id="pub-ticker" placeholder="e.g. NVDA, AAPL, TSLA" oninput="updateSECPreview()" autocomplete="off"></div>
+        <div class="field"><label>Exchange</label>
+          <select id="pub-exchange">
+            <option value="auto">NYSE / NASDAQ (auto-detect)</option>
+            <option value="nyse">NYSE</option>
+            <option value="nasdaq">NASDAQ</option>
+            <option value="otc">OTC / Pink sheets</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row col3">
+        <div class="field"><label>Data to pull</label>
+          <select id="pub-data">
+            <option value="10k-8k">10-K + recent 8-K</option>
+            <option value="10k">10-K only</option>
+            <option value="s1">S-1 (recent IPO)</option>
+            <option value="earnings">Earnings transcript</option>
+          </select>
+        </div>
+        <div class="field"><label>Evaluation focus</label>
+          <select id="pub-focus">
+            <option value="full">Full score (all modules)</option>
+            <option value="thesis">Investment thesis only</option>
+            <option value="risk">Risk and red flags only</option>
+            <option value="signal">Day trade signal only</option>
+          </select>
+        </div>
+        <div class="field"><label>Investor lens</label>
+          <select id="pub-lens">
+            <option value="vc">VC / growth investor</option>
+            <option value="daytrader">Day trader</option>
+            <option value="longterm">Long-term holder</option>
+            <option value="short">Short seller</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Additional context (optional)</label>
+          <textarea id="pub-context" placeholder="e.g. Focus on AI exposure, compare to AMZN and MSFT, ignore legacy segments"></textarea>
+        </div>
+      </div>
+      <div id="sec-preview" class="preview-bar hidden">
+        <i class="ti ti-sparkles"></i>
+        <span id="sec-preview-text">Enter a ticker to see what Claude will pull from SEC EDGAR</span>
+      </div>
+    </div>
+
+    <!-- STARTUP FORM -->
+    <div id="fs-startup" class="form-panel hidden">
+      <div class="form-title" style="color:#27500A"><i class="ti ti-rocket"></i> Startup evaluation</div>
+      <div class="section-label">Stage</div>
+      <div class="stage-pills" id="stage-pills">
+        <span class="stage-pill active" data-stage="pre-seed" onclick="selectStage(this)">Pre-seed</span>
+        <span class="stage-pill" data-stage="seed" onclick="selectStage(this)">Seed</span>
+        <span class="stage-pill" data-stage="series-a" onclick="selectStage(this)">Series A</span>
+        <span class="stage-pill" data-stage="series-b" onclick="selectStage(this)">Series B</span>
+        <span class="stage-pill" data-stage="series-c" onclick="selectStage(this)">Series C+</span>
+      </div>
+      <div class="field-row col2">
+        <div class="field"><label>Company name</label><input type="text" id="st-name" placeholder="e.g. Acme AI Inc."></div>
+        <div class="field"><label>Industry / sector</label><input type="text" id="st-sector" placeholder="e.g. B2B SaaS, Fintech, Consumer AI"></div>
+      </div>
+      <div class="field-row col3">
+        <div class="field"><label>ARR / MRR</label><input type="text" id="st-arr" placeholder="e.g. $240K ARR"></div>
+        <div class="field"><label>Team size</label><input type="text" id="st-team" placeholder="e.g. 8 FTE"></div>
+        <div class="field"><label>Funding raised</label><input type="text" id="st-raised" placeholder="e.g. $1.2M total"></div>
+      </div>
+      <div class="field-row col3">
+        <div class="field"><label>Monthly burn</label><input type="text" id="st-burn" placeholder="e.g. $65K / mo"></div>
+        <div class="field"><label>Runway</label><input type="text" id="st-runway" placeholder="e.g. 14 months"></div>
+        <div class="field"><label>MoM growth</label><input type="text" id="st-growth" placeholder="e.g. 12% MoM"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Problem and solution</label>
+          <textarea id="st-problem" placeholder="e.g. SMBs spend 8 hrs/week on manual invoicing. We automate AP/AR via AI. 47 paying customers, $0 churn in 6 months."></textarea>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Founder background (optional)</label>
+          <textarea id="st-founder" style="min-height:60px" placeholder="e.g. 2x founder, prev YC W21, ex-Stripe engineer."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- IPO FORM -->
+    <div id="fs-ipo" class="form-panel hidden">
+      <div class="form-title" style="color:#633806"><i class="ti ti-chart-arrows-vertical"></i> IPO candidate evaluation</div>
+      <div class="upload-zone" onclick="document.getElementById('s1-file').click()">
+        <div class="uz-icon"><i class="ti ti-file-text"></i></div>
+        <div class="uz-title">Upload S-1 filing</div>
+        <div class="uz-sub">PDF · Claude extracts financials, risk factors, and offering details</div>
+        <input type="file" id="s1-file" accept=".pdf" style="display:none" onchange="handleS1Upload(this)">
+      </div>
+      <div id="s1-ready" class="file-ready hidden"><i class="ti ti-file-check"></i><span id="s1-filename">—</span></div>
+      <div class="or-divider">or enter manually</div>
+      <div class="field-row col2">
+        <div class="field"><label>Company name</label><input type="text" id="ipo-name" placeholder="e.g. Stripe Inc."></div>
+        <div class="field"><label>Expected ticker</label><input type="text" id="ipo-ticker" placeholder="e.g. STRP"></div>
+      </div>
+      <div class="field-row col3">
+        <div class="field"><label>Last private valuation</label><input type="text" id="ipo-valuation" placeholder="e.g. $65B"></div>
+        <div class="field"><label>Revenue (TTM)</label><input type="text" id="ipo-revenue" placeholder="e.g. $4.2B"></div>
+        <div class="field"><label>Revenue growth</label><input type="text" id="ipo-growth" placeholder="e.g. +28% YoY"></div>
+      </div>
+      <div class="field-row col3">
+        <div class="field"><label>Expected float</label><input type="text" id="ipo-float" placeholder="e.g. 10% of shares"></div>
+        <div class="field"><label>Lock-up period</label><input type="text" id="ipo-lockup" placeholder="e.g. 180 days"></div>
+        <div class="field"><label>Lead underwriters</label><input type="text" id="ipo-underwriters" placeholder="e.g. Goldman, Morgan Stanley"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Evaluation focus</label>
+          <select id="ipo-focus">
+            <option value="full">Full IPO readiness score</option>
+            <option value="comps">Valuation vs comparables only</option>
+            <option value="risk">Risk factors and red flags</option>
+            <option value="pop">Day-1 pop probability</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- PITCH DECK FORM -->
+    <div id="fs-deck" class="form-panel hidden">
+      <div class="form-title" style="color:#3C3489"><i class="ti ti-presentation"></i> Pitch deck evaluation</div>
+      <div class="upload-zone" onclick="document.getElementById('deck-file').click()">
+        <div class="uz-icon"><i class="ti ti-upload"></i></div>
+        <div class="uz-title">Upload pitch deck PDF</div>
+        <div class="uz-sub">Max 20MB · Claude extracts team, market, traction, financials, and moat</div>
+        <input type="file" id="deck-file" accept=".pdf" style="display:none" onchange="handleDeckUpload(this)">
+      </div>
+      <div id="deck-ready" class="file-ready hidden"><i class="ti ti-file-check"></i><span id="deck-filename">—</span></div>
+      <div class="field-row col2" style="margin-top:14px">
+        <div class="field"><label>Investor lens</label>
+          <select id="deck-lens">
+            <option value="seed">VC / seed investor</option>
+            <option value="angel">Angel investor</option>
+            <option value="cvc">Strategic / corporate VC</option>
+            <option value="growth">Growth equity</option>
+          </select>
+        </div>
+        <div class="field"><label>Evaluation depth</label>
+          <select id="deck-depth">
+            <option value="full">Full score (all modules)</option>
+            <option value="quick">Quick pass / fail</option>
+            <option value="flags">Red flags only</option>
+            <option value="memo">Deal memo draft</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Notes for Claude (optional)</label>
+          <textarea id="deck-notes" style="min-height:60px" placeholder="e.g. Focus on unit economics. Compare to Notion at similar stage."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action row -->
+    <div class="action-row">
+      <div class="hint-chips" id="hint-chips">
+        <span class="hint-chip"><i class="ti ti-database"></i> SEC EDGAR</span>
+        <span class="hint-chip"><i class="ti ti-sparkles"></i> Claude Sonnet</span>
+        <span class="hint-chip"><i class="ti ti-device-floppy"></i> Saved to Airtable</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost" onclick="clearForm()">Clear</button>
+        <button class="btn btn-primary" id="run-btn" onclick="runEvaluation()">
+          <i class="ti ti-sparkles"></i> Run evaluation
+        </button>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div id="history" style="margin-top:40px">
+      <div class="section-label" style="margin-bottom:12px">Recent evaluations</div>
+      <div class="result-section">
+        <div id="history-body"><p class="text-muted" style="font-size:13px;padding:8px 0">Loading history…</p></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Fetching SEC data…</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  // ── Config ──────────────────────────────────────────────────────────────
+  const WORKER_URL = 'https://steep-shadow-3542.clashworldgame88.workers.dev';
+
+  // ── State ────────────────────────────────────────────────────────────────
+  let currentType  = 'public';
+  let currentStage = 'pre-seed';
+  let s1File       = null;
+  let deckFile     = null;
+
+  // PDF.js worker
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  // ── Type selector ────────────────────────────────────────────────────────
+  function selectType(type) {
+    currentType = type;
+    ['public','startup','ipo','deck'].forEach(t => {
+      document.getElementById('tc-' + t).classList.toggle('active', t === type);
+      document.getElementById('fs-' + t).classList.toggle('hidden', t !== type);
+    });
+    const hints = {
+      public:  '<span class="hint-chip"><i class="ti ti-database"></i> SEC EDGAR</span><span class="hint-chip"><i class="ti ti-sparkles"></i> Claude Sonnet</span><span class="hint-chip"><i class="ti ti-device-floppy"></i> Saved to Airtable</span>',
+      startup: '<span class="hint-chip"><i class="ti ti-forms"></i> Manual entry</span><span class="hint-chip"><i class="ti ti-sparkles"></i> Stage-aware prompt</span><span class="hint-chip"><i class="ti ti-device-floppy"></i> Saved to Airtable</span>',
+      ipo:     '<span class="hint-chip"><i class="ti ti-file-text"></i> S-1 parser</span><span class="hint-chip"><i class="ti ti-sparkles"></i> IPO readiness model</span><span class="hint-chip"><i class="ti ti-device-floppy"></i> Saved to Airtable</span>',
+      deck:    '<span class="hint-chip"><i class="ti ti-upload"></i> PDF.js extract</span><span class="hint-chip"><i class="ti ti-sparkles"></i> Claude Sonnet</span><span class="hint-chip"><i class="ti ti-device-floppy"></i> Saved to Airtable</span>',
+    };
+    document.getElementById('hint-chips').innerHTML = hints[type];
+  }
+
+  // ── Stage pills ──────────────────────────────────────────────────────────
+  function selectStage(el) {
+    document.querySelectorAll('.stage-pill').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    currentStage = el.dataset.stage;
+  }
+
+  // ── SEC preview ──────────────────────────────────────────────────────────
+  function updateSECPreview() {
+    const ticker = document.getElementById('pub-ticker').value.trim().toUpperCase();
+    const preview = document.getElementById('sec-preview');
+    if (ticker.length >= 1) {
+      preview.classList.remove('hidden');
+      document.getElementById('sec-preview-text').textContent =
+        'Will pull ' + ticker + ' 10-K and recent 8-K from SEC EDGAR → Claude analysis';
+    } else {
+      preview.classList.add('hidden');
+    }
+  }
+
+  // ── File handlers ────────────────────────────────────────────────────────
+  function handleS1Upload(input) {
+    s1File = input.files[0];
+    if (s1File) {
+      document.getElementById('s1-filename').textContent = s1File.name;
+      document.getElementById('s1-ready').classList.remove('hidden');
+    }
+  }
+
+  function handleDeckUpload(input) {
+    deckFile = input.files[0];
+    if (deckFile) {
+      document.getElementById('deck-filename').textContent = deckFile.name;
+      document.getElementById('deck-ready').classList.remove('hidden');
+    }
+  }
+
+  // ── Clear ────────────────────────────────────────────────────────────────
+  function clearForm() {
+    document.querySelectorAll('input[type=text], textarea').forEach(el => el.value = '');
+    s1File = deckFile = null;
+    document.getElementById('s1-ready').classList.add('hidden');
+    document.getElementById('deck-ready').classList.add('hidden');
+    document.getElementById('sec-preview').classList.add('hidden');
+  }
+
+  // ── Loading ──────────────────────────────────────────────────────────────
+  function showLoading(msg) {
+    document.getElementById('loading-text').textContent = msg;
+    document.getElementById('loading').classList.add('show');
+  }
+  function hideLoading() {
+    document.getElementById('loading').classList.remove('show');
+  }
+
+  // ── SEC fetch ────────────────────────────────────────────────────────────
+  async function fetchSECData(ticker) {
+    const res = await fetch(WORKER_URL + '/fetch-sec', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticker }),
+    });
+    if (!res.ok) throw new Error('SEC fetch failed: ' + res.status);
+    return await res.json();
+  }
+
+  function formatFact(fact) {
+    if (!fact) return null;
+    const val = fact.value, period = fact.period;
+    if (val >= 1e9) return '$' + (val / 1e9).toFixed(2) + 'B (' + period + ')';
+    if (val >= 1e6) return '$' + (val / 1e6).toFixed(1) + 'M (' + period + ')';
+    return '$' + val.toLocaleString() + ' (' + period + ')';
+  }
+
+  function formatSECData(d) {
+    const f = d.facts;
+    if (!f) return { ticker: d.ticker, note: 'No EDGAR facts found' };
+    return {
+      ticker: d.ticker, cik: d.cik,
+      revenue: formatFact(f.revenue),
+      netIncome: formatFact(f.netIncome),
+      totalAssets: formatFact(f.assets),
+      totalLiabilities: formatFact(f.liabilities),
+      operatingCashFlow: formatFact(f.operatingCashFlow),
+      filingCount: d.searchHits,
+    };
+  }
+
+  // ── PDF extract ──────────────────────────────────────────────────────────
+  async function extractPDFText(file) {
+    if (!window.pdfjsLib) throw new Error('PDF.js not loaded');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const ab  = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    const pages = Math.min(pdf.numPages, 40);
+    const texts = [];
+    for (let i = 1; i <= pages; i++) {
+      const page    = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const text    = content.items.map(it => it.str).join(' ');
+      if (text.trim()) texts.push('[Page ' + i + ']\n' + text);
+    }
+    return { pageCount: pdf.numPages, text: texts.join('\n\n') };
+  }
+
+  function truncate(text, max) {
+    max = max || 12000;
+    if (text.length <= max) return text;
+    const k1 = Math.floor(max * 0.6);
+    return text.slice(0, k1) + '\n\n[...truncated...]\n\n' + text.slice(-(max - k1));
+  }
+
+  // ── Claude evaluate ──────────────────────────────────────────────────────
+  async function callClaude(type, data, context) {
+    const res = await fetch(WORKER_URL + '/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, data, context }),
+    });
+    if (!res.ok) throw new Error('Evaluation failed: ' + res.status);
+    const result = await res.json();
+    if (result.parseError) throw new Error('Claude returned unparseable response');
+    return result;
+  }
+
+  // ── Save to Airtable ─────────────────────────────────────────────────────
+  async function saveDeal(result) {
+    await fetch(WORKER_URL + '/save-deal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        company:  result.company,
+        ticker:   result.ticker,
+        type:     result.type,
+        stage:    result.stage,
+        aiScore:  result.aiScore,
+        moat:     result.moat,
+        signal:   result.signal,
+        redFlags: result.redFlags,
+        summary:  result.summary,
+      }),
+    });
+  }
+
+  // ── Load history ─────────────────────────────────────────────────────────
+  async function loadHistory() {
+    try {
+      const res  = await fetch(WORKER_URL + '/get-deals');
+      const data = await res.json();
+      const body = document.getElementById('history-body');
+      if (!data.records || !data.records.length) {
+        body.innerHTML = '<p class="text-muted" style="font-size:13px;padding:8px 0">No evaluations yet — run your first one above.</p>';
+        return;
+      }
+      const signalClass = s => ({ 'Strong Buy':'sig-buy-strong','Buy':'sig-buy','Watch':'sig-watch','Sell':'sig-sell','Short':'sig-short' }[s] || 'sig-watch');
+      const scoreCol    = n => n >= 80 ? '#1D9E75' : n >= 60 ? '#BA7517' : '#E24B4A';
+      body.innerHTML = '<table class="history-table"><thead><tr><th>Company</th><th>Type</th><th>Stage</th><th>AI score</th><th>Signal</th><th>Evaluated</th></tr></thead><tbody>' +
+        data.records.map(r => {
+          const f = r.fields;
+          return '<tr><td><strong>' + (f.Company||'—') + '</strong>' + (f.Ticker ? ' <span class="text-muted">'+f.Ticker+'</span>' : '') + '</td><td>' + (f.Type||'—') + '</td><td>' + (f.Stage||'—') + '</td><td style="color:' + scoreCol(f.AIScore||0) + ';font-weight:600">' + (f.AIScore||'—') + '</td><td><span class="badge ' + signalClass(f.Signal) + '">' + (f.Signal||'—') + '</span></td><td class="text-muted">' + (f.EvaluatedAt ? new Date(f.EvaluatedAt).toLocaleDateString() : '—') + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    } catch(e) {
+      document.getElementById('history-body').innerHTML = '<p class="text-muted" style="font-size:13px">Could not load history.</p>';
+    }
+  }
+
+  // ── Run evaluation ────────────────────────────────────────────────────────
+  async function runEvaluation() {
+    const btn = document.getElementById('run-btn');
+    btn.disabled = true;
+    try {
+      let data = {}, context = '';
+
+      if (currentType === 'public') {
+        const ticker = document.getElementById('pub-ticker').value.trim().toUpperCase();
+        if (!ticker) { alert('Enter a ticker symbol'); btn.disabled = false; return; }
+        showLoading('Fetching ' + ticker + ' from SEC EDGAR…');
+        const secRaw = await fetchSECData(ticker);
+        data = {
+          ...formatSECData(secRaw),
+          focus:    document.getElementById('pub-focus').value,
+          lens:     document.getElementById('pub-lens').value,
+          dataType: document.getElementById('pub-data').value,
+        };
+        context = document.getElementById('pub-context').value;
+      }
+      else if (currentType === 'startup') {
+        if (!document.getElementById('st-name').value.trim()) { alert('Enter a company name'); btn.disabled = false; return; }
+        data = {
+          name:      document.getElementById('st-name').value,
+          sector:    document.getElementById('st-sector').value,
+          stage:     currentStage,
+          arr:       document.getElementById('st-arr').value,
+          teamSize:  document.getElementById('st-team').value,
+          raised:    document.getElementById('st-raised').value,
+          burn:      document.getElementById('st-burn').value,
+          runway:    document.getElementById('st-runway').value,
+          momGrowth: document.getElementById('st-growth').value,
+          problem:   document.getElementById('st-problem').value,
+          founder:   document.getElementById('st-founder').value,
+        };
+        showLoading('Evaluating startup…');
+      }
+      else if (currentType === 'ipo') {
+        if (s1File) {
+          showLoading('Parsing S-1 PDF…');
+          const ex = await extractPDFText(s1File);
+          data = { source:'s1-upload', filename:s1File.name, pageCount:ex.pageCount, content:truncate(ex.text), focus:document.getElementById('ipo-focus').value };
+        } else {
+          data = {
+            source:'manual',
+            name:         document.getElementById('ipo-name').value,
+            ticker:       document.getElementById('ipo-ticker').value,
+            valuation:    document.getElementById('ipo-valuation').value,
+            revenue:      document.getElementById('ipo-revenue').value,
+            revenueGrowth:document.getElementById('ipo-growth').value,
+            float:        document.getElementById('ipo-float').value,
+            lockup:       document.getElementById('ipo-lockup').value,
+            underwriters: document.getElementById('ipo-underwriters').value,
+            focus:        document.getElementById('ipo-focus').value,
+          };
+          showLoading('Evaluating IPO candidate…');
+        }
+      }
+      else if (currentType === 'deck') {
+        if (!deckFile) { alert('Upload a pitch deck PDF first'); btn.disabled = false; return; }
+        showLoading('Parsing pitch deck…');
+        const ex = await extractPDFText(deckFile);
+        data = { filename:deckFile.name, pageCount:ex.pageCount, content:truncate(ex.text), lens:document.getElementById('deck-lens').value, depth:document.getElementById('deck-depth').value, notes:document.getElementById('deck-notes').value };
+      }
+
+      showLoading('Claude is evaluating…');
+      const result = await callClaude(currentType, data, context);
+
+      showLoading('Saving to Airtable…');
+      await saveDeal(result);
+
+      sessionStorage.setItem('mi-result', JSON.stringify(result));
+      window.location.href = 'results.html';
+
+    } catch(err) {
+      hideLoading();
+      alert('Error: ' + err.message);
+      console.error(err);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  loadHistory();
+</script>
+</body>
+</html>
