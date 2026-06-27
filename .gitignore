@@ -1,0 +1,18 @@
+# Secrets - never push these
+credentials.json
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+env/
+
+# Output files
+analysis_results.json
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
