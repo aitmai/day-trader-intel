@@ -16,3 +16,11 @@ analysis_results.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Auto-added by gitpush.py
+*.pyc
+*.pyo
+.venv/
+secrets.json
+service_account.json
+token.json
